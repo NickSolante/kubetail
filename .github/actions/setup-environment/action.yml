@@ -60,23 +60,14 @@ runs:
       uses: pnpm/action-setup@v4
       with:
         version: ${{ inputs.pnpm-version }}
-        run_install: false
 
     - name: Set up Node.js
       if: inputs.setup-node == 'true'
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-        cache: false
-
-    - name: Set up Node.js cache
-      if: inputs.setup-node == 'true'
-      uses: actions/cache@v4
-      with:
-        path: ~/.pnpm-store
-        key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
-        restore-keys: |
-          ${{ runner.os }}-pnpm-
+        cache: 'pnpm'
+        cache-dependency-path: '**/pnpm-lock.yaml'
 
     - name: Set up Go
       if: inputs.setup-go == 'true'
