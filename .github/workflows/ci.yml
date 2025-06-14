@@ -219,6 +219,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-environment
         with:
+          setup-node: 'true'
           setup-go: 'true'
       - name: Build CLI for ${{ matrix.platform }}
         run: make build
