@@ -105,6 +105,7 @@ jobs:
         with:
           setup-rust: 'false'
           setup-go: 'false'
+          setup-node: 'true'
       - name: Install dependencies
         working-directory: ./dashboard-ui
         run: pnpm install --frozen-lockfile
@@ -120,6 +121,7 @@ jobs:
         with:
           setup-rust: 'false'
           setup-go: 'false'
+          setup-node: 'true'
       - name: Install dependencies
         working-directory: ./dashboard-ui
         run: pnpm install --frozen-lockfile
@@ -135,6 +137,7 @@ jobs:
         with:
           setup-rust: 'false'
           setup-go: 'false'
+          setup-node: 'true'
       - name: Install dependencies
         working-directory: ./dashboard-ui
         run: pnpm install --frozen-lockfile
