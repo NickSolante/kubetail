@@ -1,5 +1,5 @@
 name: 'Setup Environment'
-description: 'Sets up Node.js, PNPM, and Go for building Kubetail'
+description: 'Sets up Node.js, PNPM, Go, and Rust conditionally for building Kubetail'
 
 inputs:
   go-version:
@@ -30,6 +30,10 @@ inputs:
     description: 'Whether to set up Go'
     required: false
     default: 'false'
+  setup-node:
+    description: 'Whether to set up Node.js and PNPM'
+    required: false
+    default: 'false'
 
 runs:
   using: "composite"
@@ -40,7 +44,7 @@ runs:
 
     - name: Set up Rust
       if: inputs.setup-rust == 'true'
-      uses: actions-rs/toolchain@v1
+      uses: dtolnay/rust-toolchain@stable
       with:
         toolchain: ${{ inputs.rust-toolchain }}
         components: rustfmt, clippy
@@ -52,21 +56,42 @@ runs:
         workspaces: "./crates/rgkl"
 
     - name: Set up PNPM
+      if: inputs.setup-node == 'true'
       uses: pnpm/action-setup@v4
       with:
         version: ${{ inputs.pnpm-version }}
         run_install: false
 
     - name: Set up Node.js
+      if: inputs.setup-node == 'true'
       uses: actions/setup-node@v4
       with:
         node-version: ${{ inputs.node-version }}
-        cache: 'pnpm'
-        cache-dependency-path: '**/pnpm-lock.yaml'
+        cache: false
+
+    - name: Set up Node.js cache
+      if: inputs.setup-node == 'true'
+      uses: actions/cache@v4
+      with:
+        path: ~/.pnpm-store
+        key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+        restore-keys: |
+          ${{ runner.os }}-pnpm-
 
     - name: Set up Go
       if: inputs.setup-go == 'true'
       uses: actions/setup-go@v5
       with:
         go-version: ${{ inputs.go-version }}
-        cache: true
+        cache: false
+
+    - name: Set up Go cache
+      if: inputs.setup-go == 'true'
+      uses: actions/cache@v4
+      with:
+        path: |
+          ~/.cache/go-build
+          ~/go/pkg/mod
+        key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
+        restore-keys: |
+          ${{ runner.os }}-go-
