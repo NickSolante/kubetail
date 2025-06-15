@@ -57,10 +57,22 @@ jobs:
         working-directory: ./crates/rgkl
         run: cargo test
 
+  modules-lint:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./.github/actions/setup-environment
+        with:
+          setup-go: 'true'
+      - name: Run format check
+        working-directory: ./modules
+        run: test -z "$(gofmt -l .)"
+
   modules-discover:
     runs-on: ubuntu-24.04
     outputs:
       packages: ${{ steps.packages.outputs.list }}
+      has-packages: ${{ steps.packages.outputs.has-packages }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-environment
@@ -69,11 +81,19 @@ jobs:
       - id: packages
         working-directory: ./modules
         run: |
-          packages=$(go list ./... | jq -R -s -c 'split("\n")[:-1]')
-          echo "list=$packages" >> $GITHUB_OUTPUT
+          packages=$(go list ./... 2>/dev/null || echo "")
+          if [ -z "$packages" ]; then
+            echo "list=[]" >> $GITHUB_OUTPUT
+            echo "has-packages=false" >> $GITHUB_OUTPUT
+          else
+            packages_json=$(echo "$packages" | jq -R -s -c 'split("\n")[:-1]')
+            echo "list=$packages_json" >> $GITHUB_OUTPUT
+            echo "has-packages=true" >> $GITHUB_OUTPUT
+          fi
 
   modules-vet:
     needs: modules-discover
+    if: needs.modules-discover.outputs.has-packages == 'true'
     runs-on: ubuntu-24.04
     strategy:
       matrix:
@@ -88,6 +108,7 @@ jobs:
 
   modules-test:
     needs: modules-discover
+    if: needs.modules-discover.outputs.has-packages == 'true'
     runs-on: ubuntu-24.04
     strategy:
       matrix:
