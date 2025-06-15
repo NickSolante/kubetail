@@ -139,56 +139,100 @@ jobs:
       dashboard-ui-lint, dashboard-ui-test, dashboard-ui-build
     ]
     runs-on: ${{ matrix.runner }}
-    timeout-minutes: 20
+    timeout-minutes: 30
     strategy:
+      fail-fast: false
       matrix:
+        image: [ dashboard, cluster-api, cluster-agent ]
+        target: [ final, debug ]
         include:
-          # AMD64 builds on standard Ubuntu
+          - platform: linux/amd64
+            runner: ubuntu-24.04
+            arch: amd64
+          - platform: linux/arm64
+            runner: ubuntu-24.04-arm
+            arch: arm64
           - image: dashboard
             dockerfile: build/package/Dockerfile.dashboard
-            runner: ubuntu-24.04
-            tag-suffix: latest
-            cache-scope: dashboard-amd64
+            context: .
+            build-args: |
+              NODE_VERSION=22.16.0
+              PNPM_VERSION=10.11.0
+              GO_VERSION=1.24.3
           - image: cluster-api
             dockerfile: build/package/Dockerfile.cluster-api
-            runner: ubuntu-24.04
-            tag-suffix: latest
-            cache-scope: cluster-api-amd64
+            context: .
+            build-args: |
+              GO_VERSION=1.24.3
           - image: cluster-agent
             dockerfile: build/package/Dockerfile.cluster-agent
-            runner: ubuntu-24.04
-            tag-suffix: latest
-            cache-scope: cluster-agent-amd64
-          # ARM64 builds on ARM Ubuntu
-          - image: dashboard
-            dockerfile: build/package/Dockerfile.dashboard
-            runner: ubuntu-24.04-arm
-            tag-suffix: arm64
-            cache-scope: dashboard-arm64
+            context: .
+            build-args: |
+              GO_VERSION=1.24.3
+              RUST_VERSION=1.87.0
+        exclude:
           - image: cluster-api
-            dockerfile: build/package/Dockerfile.cluster-api
-            runner: ubuntu-24.04-arm
-            tag-suffix: arm64
-            cache-scope: cluster-api-arm64
+            target: debug
           - image: cluster-agent
-            dockerfile: build/package/Dockerfile.cluster-agent
-            runner: ubuntu-24.04-arm
-            tag-suffix: arm64
-            cache-scope: cluster-agent-arm64
+            target: debug
+
     steps:
       - name: Checkout
         uses: actions/checkout@v4
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
-      - name: Build ${{ matrix.image }} for native architecture
+
+      - name: Generate metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: kubetail-${{ matrix.image }}
+          tags: |
+            type=ref,event=pr,suffix=-${{ matrix.target }}
+            type=raw,value=${{ matrix.target }}-{{sha}}
+          flavor: |
+            suffix=-${{ matrix.arch }}
+
+      - name: Cache Docker layers
+        uses: actions/cache@v4
+        with:
+          path: /tmp/.buildx-cache
+          key: ${{ runner.os }}-${{ runner.arch }}-buildx-${{ matrix.image }}-${{ matrix.target }}-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-${{ runner.arch }}-buildx-${{ matrix.image }}-${{ matrix.target }}-
+            ${{ runner.os }}-${{ runner.arch }}-buildx-${{ matrix.image }}-
+
+      - name: Build ${{ matrix.image }} (${{ matrix.target }}) natively for ${{ matrix.arch }}
         uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ${{ matrix.context }}
           file: ${{ matrix.dockerfile }}
+          platforms: ${{ matrix.platform }}
+          target: ${{ matrix.target }}
           push: false
-          tags: kubetail-${{ matrix.image }}:${{ matrix.tag-suffix }}
-          cache-from: type=gha,scope=${{ matrix.cache-scope }}
-          cache-to: type=gha,mode=max,scope=${{ matrix.cache-scope }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: ${{ matrix.build-args }}
+          cache-from: |
+            type=gha,scope=${{ matrix.image }}-${{ matrix.target }}-${{ matrix.arch }}
+            type=local,src=/tmp/.buildx-cache
+          cache-to: |
+            type=gha,mode=max,scope=${{ matrix.image }}-${{ matrix.target }}-${{ matrix.arch }}
+            type=local,dest=/tmp/.buildx-cache-new,mode=max
+          outputs: type=docker,dest=/tmp/${{ matrix.image }}-${{ matrix.target }}-${{ matrix.arch }}.tar
+
+      - name: Move cache
+        run: |
+          rm -rf /tmp/.buildx-cache
+          mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+      - name: Upload image artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: docker-${{ matrix.image }}-${{ matrix.target }}-${{ matrix.arch }}
+          path: /tmp/${{ matrix.image }}-${{ matrix.target }}-${{ matrix.arch }}.tar
+          retention-days: 1
+          compression-level: 6
 
   cli-builds:
     needs: [
