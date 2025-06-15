@@ -59,86 +59,42 @@ jobs:
 
   modules-lint:
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        module: [ cluster-agent, cluster-api, dashboard, shared ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-environment
         with:
           setup-go: 'true'
-      - name: Run format check
-        working-directory: ./modules
-        run: test -z "$(gofmt -l .)"
-
-  modules-discover:
-    runs-on: ubuntu-24.04
-    outputs:
-      packages: ${{ steps.packages.outputs.list }}
-      has-packages: ${{ steps.packages.outputs.has-packages }}
-    steps:
-      - uses: actions/checkout@v4
-      - uses: ./.github/actions/setup-environment
-        with:
-          setup-go: 'true'
-      - id: packages
-        working-directory: ./modules
-        run: |
-          echo "=== Debugging modules discovery ==="
-
-          # Check if go.mod exists
-          if [ ! -f "go.mod" ]; then
-            echo "No go.mod found in ./modules directory"
-            echo "list=[]" >> $GITHUB_OUTPUT
-            echo "has-packages=false" >> $GITHUB_OUTPUT
-            exit 0
-          fi
-
-          # List packages with debugging
-          echo "Running: go list ./..."
-          packages=$(go list ./... 2>&1)
-          echo "Raw output: $packages"
-
-          # Check if packages is empty or contains errors
-          if [ -z "$packages" ] || echo "$packages" | grep -q "cannot find module"; then
-            echo "No packages found or error occurred"
-            echo "list=[]" >> $GITHUB_OUTPUT
-            echo "has-packages=false" >> $GITHUB_OUTPUT
-          else
-            echo "Found packages, converting to JSON..."
-            # Convert to JSON array - simpler approach
-            packages_json=$(printf '%s\n' "$packages" | jq -R . | jq -s .)
-            echo "JSON output: $packages_json"
-            echo "list=$packages_json" >> $GITHUB_OUTPUT
-            echo "has-packages=true" >> $GITHUB_OUTPUT
-          fi
+      - name: Run format check for ${{ matrix.module }}
+        run: test -z "$(gofmt -l ./${{ matrix.module }})"
 
   modules-vet:
-    needs: modules-discover
-    if: needs.modules-discover.outputs.has-packages == 'true'
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        package: ${{ fromJson(needs.modules-discover.outputs.packages) }}
+        module: [ cluster-agent, cluster-api, dashboard, shared ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-environment
         with:
           setup-go: 'true'
-      - name: Vet ${{ matrix.package }}
-        run: go vet ${{ matrix.package }}
+      - name: Vet ${{ matrix.module }}
+        run: go vet ./${{ matrix.module }}/...
 
   modules-test:
-    needs: modules-discover
-    if: needs.modules-discover.outputs.has-packages == 'true'
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        package: ${{ fromJson(needs.modules-discover.outputs.packages) }}
+        module: [ cluster-agent, cluster-api, dashboard, shared ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-environment
         with:
           setup-go: 'true'
-      - name: Test ${{ matrix.package }}
-        run: go test -race -timeout 5m ${{ matrix.package }}
+      - name: Test ${{ matrix.module }}
+        run: go test -race -timeout 5m ./${{ matrix.module }}/...
 
   dashboard-ui-lint:
     runs-on: ubuntu-24.04
