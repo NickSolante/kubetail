@@ -61,42 +61,42 @@ jobs:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        module: [ cluster-agent, cluster-api, dashboard, shared ]
+        module: [ cli, cluster-agent, cluster-api, dashboard, shared ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-environment
         with:
           setup-go: 'true'
       - name: Run format check for ${{ matrix.module }}
-        working-directory: ./${{ matrix.module }}
+        working-directory: ./modules/${{ matrix.module }}
         run: test -z "$(gofmt -l .)"
 
   modules-vet:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        module: [ cluster-agent, cluster-api, dashboard, shared ]
+        module: [ cli, cluster-agent, cluster-api, dashboard, shared ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-environment
         with:
           setup-go: 'true'
       - name: Vet ${{ matrix.module }}
-        working-directory: ./${{ matrix.module }}
+        working-directory: ./modules/${{ matrix.module }}
         run: go vet ./...
 
   modules-test:
     runs-on: ubuntu-24.04
     strategy:
       matrix:
-        module: [ cluster-agent, cluster-api, dashboard, shared]
+        module: [ cli, cluster-agent, cluster-api, dashboard, shared ]
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-environment
         with:
           setup-go: 'true'
       - name: Test ${{ matrix.module }}
-        working-directory: ./${{ matrix.module }}
+        working-directory: ./modules/${{ matrix.module }}
         run: go test -race -timeout 5m ./...
 
   dashboard-ui-lint:
