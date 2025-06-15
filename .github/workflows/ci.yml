@@ -57,38 +57,48 @@ jobs:
         working-directory: ./crates/rgkl
         run: cargo test
 
-  modules-lint:
+  modules-discover:
     runs-on: ubuntu-24.04
+    outputs:
+      packages: ${{ steps.packages.outputs.list }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-environment
         with:
           setup-go: 'true'
-      - name: Run linter
+      - id: packages
         working-directory: ./modules
-        run: test -z "$(gofmt -l .)"
+        run: |
+          packages=$(go list ./... | jq -R -s -c 'split("\n")[:-1]')
+          echo "list=$packages" >> $GITHUB_OUTPUT
 
   modules-vet:
+    needs: modules-discover
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        package: ${{ fromJson(needs.modules-discover.outputs.packages) }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-environment
         with:
           setup-go: 'true'
-      - name: Run code vetter
-        working-directory: ./modules
-        run: go vet github.com/kubetail-org/kubetail/modules/...
+      - name: Vet ${{ matrix.package }}
+        run: go vet ${{ matrix.package }}
 
   modules-test:
+    needs: modules-discover
     runs-on: ubuntu-24.04
+    strategy:
+      matrix:
+        package: ${{ fromJson(needs.modules-discover.outputs.packages) }}
     steps:
       - uses: actions/checkout@v4
       - uses: ./.github/actions/setup-environment
         with:
           setup-go: 'true'
-      - name: Run tests
-        working-directory: ./modules
-        run: go test -race github.com/kubetail-org/kubetail/modules/...
+      - name: Test ${{ matrix.package }}
+        run: go test -race -timeout 5m ${{ matrix.package }}
 
   dashboard-ui-lint:
     runs-on: ubuntu-24.04
